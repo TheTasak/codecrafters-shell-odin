@@ -1,48 +1,75 @@
 package main
 
 import "base:runtime"
-import "core:path/filepath"
 import "core:fmt"
 import "core:os"
 import "core:strings"
 
-BREAK_COMMAND :: "exit"
-ECHO_COMMAND :: "echo"
-TYPE_COMMAND :: "type"
-BUILTIN_COMMANDS :: []string{BREAK_COMMAND, ECHO_COMMAND, TYPE_COMMAND}
+Command :: enum {
+    EXIT,
+    ECHO,
+    TYPE,
+}
+
+Commands :: [Command]string {
+    .EXIT = "exit",
+    .ECHO = "echo",
+    .TYPE = "type"
+}
+
+
+is_executable :: proc(filepath: string) -> bool {
+    if os.exists(filepath){
+        perms, err := os.stat(filepath, context.allocator)
+        defer os.file_info_delete(perms, context.allocator)
+        if .Execute_User in perms.mode && err == nil {
+            return true
+        }
+    }
+    return false
+}
+
+get_env_path :: proc(command: string) -> string {
+    buf := [2048]u8{}
+    path_var := os.get_env_buf(buf[:], "PATH")
+    paths := strings.split(string(path_var), ":")
+    
+    for path in paths {
+        filepath := strings.concatenate({path, "/", command})
+        if is_executable(filepath) {
+            return filepath
+        }
+    }
+    return ""
+}
+
+check_external :: proc(command: string, args: string) -> (string, bool) {
+    if path := get_env_path(command); path != "" {
+        return path, true
+    }
+    return "", false
+}
 
 echo :: proc(args: string) {
     fmt.printf("%s\n", args)
 }
 
 type :: proc(args: string) {
-    for c in BUILTIN_COMMANDS {
+    // locate built-in commands 
+    for c in Commands {
         if strings.starts_with(args, c) {
             fmt.printf("%s is a shell builtin\n", c)
             return
         }
     }
 
-    buf := [2048]u8{}
-    path_var := os.get_env_buf(buf[:], "PATH")
-    paths := strings.split(string(path_var), ":")
-    for path in paths {
-        file_path := strings.concatenate({path, "/", args})
-        if os.exists(file_path){
-            perms, err := os.stat(file_path, context.allocator)
-            defer os.file_info_delete(perms, context.allocator)
-            if .Execute_User in perms.mode && err == nil {
-                fmt.printf("%s is %s\n", args, file_path)
-                return
-            }
-        }
+    // locate executables using PATH
+    path := get_env_path(args)
+    if path != "" {
+        fmt.printf("%s is %s\n", args, path)
+    } else {
+        fmt.printf("%s: not found\n", args)
     }
-
-    fmt.printf("%s: not found\n", args)
-}
-
-get_args :: proc(s: string, command: string) -> string {
-    return s[len(command)+1:]
 }
 
 main :: proc() {
@@ -55,16 +82,42 @@ main :: proc() {
             fmt.println(err)
             panic("something went wrong")
         }
-        command := strings.trim_right(string(buf[:total_read]), "\n")
 
-        if command == BREAK_COMMAND {
-            break
-        } else if strings.starts_with(command, ECHO_COMMAND + " ") {
-            echo(get_args(command, ECHO_COMMAND))
-        } else if strings.starts_with(command, TYPE_COMMAND + " ") {
-            type(get_args(command, TYPE_COMMAND))
+        query := strings.trim_right(string(buf[:total_read]), "\n")
+        command, args : string
+        if i := strings.index(query, " "); i != -1 {
+            command = query[:i]
+            args = query[i+1:]
         } else {
-            fmt.printf("%s: command not found\n", command)
+            command = query
+            args = ""
+        }
+
+        // fmt.printf("%s: %s\n", command, args)
+
+        if command == Commands[Command.EXIT] {
+            break
+        } else if command == Commands[Command.ECHO] {
+            echo(args)
+        } else if command == Commands[Command.TYPE] {
+            type(args)
+        } else {
+            if path, exists := check_external(command, args); exists {
+                desc := os.Process_Desc{
+                    command = strings.split(query, " ")
+                }
+                state, stdout, stderr, _ := os.process_exec(desc, context.allocator)
+                defer delete(stdout)
+                defer delete(stderr)
+
+                if !state.success {
+                    fmt.printf("%s", string(stderr))
+                } else {
+                    fmt.printf("%s", string(stdout))
+                }
+            } else {
+                fmt.printf("%s: command not found\n", command)
+            }
         }
     }
 }
