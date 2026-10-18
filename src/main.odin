@@ -9,12 +9,14 @@ Command :: enum {
     EXIT,
     ECHO,
     TYPE,
+    PWD,
 }
 
 Commands :: [Command]string {
     .EXIT = "exit",
     .ECHO = "echo",
-    .TYPE = "type"
+    .TYPE = "type",
+    .PWD = "pwd"
 }
 
 
@@ -69,6 +71,15 @@ type :: proc(args: string) {
         fmt.printf("%s is %s\n", args, path)
     } else {
         fmt.printf("%s: not found\n", args)
+    }
+}
+
+pwd :: proc() {
+    path, err := os.get_executable_directory(context.temp_allocator)
+    if err != nil {
+        fmt.printf("%s\n", path)
+    } else {
+        fmt.printf("%s\n", err)
     }
 }
 
