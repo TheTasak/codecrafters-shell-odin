@@ -101,9 +101,14 @@ pwd :: proc() {
 }
 
 cd :: proc(args: string) {
-    err := os.change_directory(args)
-    if err != nil {
-        fmt.printf("cd: %s: No such file or directory\n", args)
+    path := args
+    if strings.starts_with(path, "~") {
+        buf := [256]u8{}
+        path_var := os.get_env_buf(buf[:], "HOME")
+        path, _ = strings.replace(path, "~", path_var, 1)
+    }
+    if err := os.change_directory(path); err != nil {
+        fmt.printf("cd: %s: No such file or directory\n", path)
     }
 }
 
