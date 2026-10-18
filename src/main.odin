@@ -77,9 +77,9 @@ type :: proc(args: string) {
 pwd :: proc() {
     path, err := os.get_executable_directory(context.temp_allocator)
     if err != nil {
-        fmt.printf("%s\n", path)
-    } else {
         fmt.printf("%s\n", err)
+    } else {
+        fmt.printf("%s\n", path)
     }
 }
 
