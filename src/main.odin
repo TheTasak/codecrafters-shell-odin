@@ -1,5 +1,7 @@
 package main
 
+import "base:runtime"
+import "core:path/filepath"
 import "core:fmt"
 import "core:os"
 import "core:strings"
@@ -20,6 +22,22 @@ type :: proc(args: string) {
             return
         }
     }
+
+    buf := [2048]u8{}
+    path_var := os.get_env_buf(buf[:], "PATH")
+    paths := strings.split(string(path_var), ":")
+    for path in paths {
+        file_path := strings.concatenate({path, "/", args})
+        if os.exists(file_path){
+            perms, err := os.stat(file_path, context.allocator)
+            defer os.file_info_delete(perms, context.allocator)
+            if .Execute_User in perms.mode && err == nil {
+                fmt.printf("%s is %s\n", args, file_path)
+                return
+            }
+        }
+    }
+
     fmt.printf("%s: not found\n", args)
 }
 
