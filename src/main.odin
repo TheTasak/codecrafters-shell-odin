@@ -103,7 +103,7 @@ pwd :: proc() {
 cd :: proc(args: string) {
     err := os.change_directory(args)
     if err != nil {
-        fmt.printf("%s", err)
+        fmt.printf("cd: %s: No such file or directory\n", args)
     }
 }
 
