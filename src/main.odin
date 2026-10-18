@@ -47,16 +47,49 @@ get_env_path :: proc(command: string) -> string {
     return ""
 }
 
-check_external :: proc(command: string, args: string) -> (string, bool) {
+parse_arguments :: proc(command: string, args_str: string) -> []string {
+    args := [dynamic]string{}
+    append(&args, command)
+    args_str, _ := strings.replace_all(args_str, "''", "")
+
+    if args_str != "" {
+        start_index : int = 0
+        for {
+            outside_boundary : bool = start_index < len(args_str) - 1
+            if i := strings.index(args_str[start_index:], "'"); i != -1 && outside_boundary {
+                end_index := start_index + i
+                if is_allowed_argument(args_str, start_index, end_index) {
+                    append(&args, args_str[start_index:end_index])
+                }
+                start_index = start_index + i + 1
+            } else if i := strings.index(args_str[start_index:], " "); i != -1 && outside_boundary {
+                end_index := start_index + i
+                if is_allowed_argument(args_str, start_index, end_index) {
+                    append(&args, args_str[start_index:end_index])
+                }
+                start_index = start_index + i + 1
+            } else {
+                if start_index < len(args_str) {
+                    append(&args, args_str[start_index:])
+                }
+                break
+            }
+        }
+        // fmt.printf("ARGS: %s\n", args)
+    }
+    return args[:]
+}
+
+check_external :: proc(command: string) -> (string, bool) {
     if path := get_env_path(command); path != "" {
         return path, true
     }
     return "", false
 }
 
-execute_program :: proc(query: string) {
+execute_program :: proc(args: []string) {
     desc := os.Process_Desc{
-        command = strings.split(query, " ")
+        command = args
     }
     state, stdout, stderr, _ := os.process_exec(desc, context.allocator)
     defer delete(stdout)
@@ -69,25 +102,38 @@ execute_program :: proc(query: string) {
     }
 }
 
-echo :: proc(args: string) {
-    fmt.printf("%s\n", args)
+is_allowed_argument :: proc(arg: string, start_pos: int, end_pos: int) -> bool {
+    current_arg := arg[start_pos:end_pos]
+    return (start_pos != end_pos) && (len(strings.trim(current_arg, " ")) > 0)
 }
 
-type :: proc(args: string) {
+echo :: proc(args: ..string) {
+    for arg in args {
+        fmt.printf("%s ", arg)
+    }
+    fmt.printf("\n")
+}
+
+type :: proc(args: []string) {
+    if len(args) < 2 {
+        fmt.printf("type: no command specified\n")
+        return
+    }
+    command := args[1]
     // locate built-in commands 
     for c in Commands {
-        if strings.starts_with(args, c) {
+        if strings.starts_with(command, c) {
             fmt.printf("%s is a shell builtin\n", c)
             return
         }
     }
 
     // locate executables using PATH
-    path := get_env_path(args)
+    path := get_env_path(command)
     if path != "" {
-        fmt.printf("%s is %s\n", args, path)
+        fmt.printf("%s is %s\n", command, path)
     } else {
-        fmt.printf("%s: not found\n", args)
+        fmt.printf("%s: not found\n", command)
     }
 }
 
@@ -100,8 +146,12 @@ pwd :: proc() {
     }
 }
 
-cd :: proc(args: string) {
-    path := args
+cd :: proc(args: []string) {
+    if len(args) < 2 {
+        fmt.printf("cd: no directory specified\n")
+        return
+    }
+    path := args[1]
     if strings.starts_with(path, "~") {
         buf := [256]u8{}
         path_var := os.get_env_buf(buf[:], "HOME")
@@ -124,19 +174,20 @@ main :: proc() {
         }
 
         query := strings.trim_right(string(buf[:total_read]), "\n")
-        command, args : string
+        command, args_str : string
         if i := strings.index(query, " "); i != -1 {
             command = query[:i]
-            args = query[i+1:]
+            args_str = query[i+1:]
         } else {
             command = query
-            args = ""
+            args_str = ""
         }
-
+        args := parse_arguments(command, args_str)
+        
         if command == Commands[Command.EXIT] {
             break
         } else if command == Commands[Command.ECHO] {
-            echo(args)
+            echo(strings.join(args[1:], " "))
         } else if command == Commands[Command.TYPE] {
             type(args)
         } else if command == Commands[Command.PWD] {
@@ -144,8 +195,8 @@ main :: proc() {
         } else if command == Commands[Command.CD] {
             cd(args)
         } else {
-            if path, exists := check_external(command, args); exists {
-                execute_program(query)
+            if path, exists := check_external(command); exists {
+                execute_program(args)
             } else {
                 fmt.printf("%s: command not found\n", command)
             }
