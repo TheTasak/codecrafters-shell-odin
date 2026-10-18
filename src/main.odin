@@ -75,7 +75,7 @@ type :: proc(args: string) {
 }
 
 pwd :: proc() {
-    path, err := os.get_executable_directory(context.temp_allocator)
+    path, err := os.get_working_directory(context.temp_allocator)
     if err != nil {
         fmt.printf("%s\n", err)
     } else {
@@ -103,8 +103,6 @@ main :: proc() {
             command = query
             args = ""
         }
-
-        // fmt.printf("%s: %s\n", command, args)
 
         if command == Commands[Command.EXIT] {
             break
