@@ -10,13 +10,15 @@ Command :: enum {
     ECHO,
     TYPE,
     PWD,
+    CD,
 }
 
 Commands :: [Command]string {
     .EXIT = "exit",
     .ECHO = "echo",
     .TYPE = "type",
-    .PWD = "pwd"
+    .PWD = "pwd",
+    .CD = "cd"
 }
 
 
@@ -52,6 +54,21 @@ check_external :: proc(command: string, args: string) -> (string, bool) {
     return "", false
 }
 
+execute_program :: proc(query: string) {
+    desc := os.Process_Desc{
+        command = strings.split(query, " ")
+    }
+    state, stdout, stderr, _ := os.process_exec(desc, context.allocator)
+    defer delete(stdout)
+    defer delete(stderr)
+
+    if !state.success {
+        fmt.printf("%s", string(stderr))
+    } else {
+        fmt.printf("%s", string(stdout))
+    }
+}
+
 echo :: proc(args: string) {
     fmt.printf("%s\n", args)
 }
@@ -80,6 +97,13 @@ pwd :: proc() {
         fmt.printf("%s\n", err)
     } else {
         fmt.printf("%s\n", path)
+    }
+}
+
+cd :: proc(args: string) {
+    err := os.change_directory(args)
+    if err != nil {
+        fmt.printf("%s", err)
     }
 }
 
@@ -112,20 +136,11 @@ main :: proc() {
             type(args)
         } else if command == Commands[Command.PWD] {
             pwd()
+        } else if command == Commands[Command.CD] {
+            cd(args)
         } else {
             if path, exists := check_external(command, args); exists {
-                desc := os.Process_Desc{
-                    command = strings.split(query, " ")
-                }
-                state, stdout, stderr, _ := os.process_exec(desc, context.allocator)
-                defer delete(stdout)
-                defer delete(stderr)
-
-                if !state.success {
-                    fmt.printf("%s", string(stderr))
-                } else {
-                    fmt.printf("%s", string(stdout))
-                }
+                execute_program(query)
             } else {
                 fmt.printf("%s: command not found\n", command)
             }
