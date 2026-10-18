@@ -112,6 +112,8 @@ main :: proc() {
             echo(args)
         } else if command == Commands[Command.TYPE] {
             type(args)
+        } else if command == Commands[Command.PWD] {
+            pwd()
         } else {
             if path, exists := check_external(command, args); exists {
                 desc := os.Process_Desc{
