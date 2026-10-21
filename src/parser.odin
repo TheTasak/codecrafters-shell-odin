@@ -46,7 +46,7 @@ search_for_next_symbol :: proc(str: string, symbol: string, start_pos: int) -> i
     }
 }
 
-parse_arguments_v2 :: proc(query: string) -> []Arg {
+parse_arguments :: proc(query: string) -> []Arg {
     args_str := query
     args := [dynamic]Arg{}
     
@@ -90,5 +90,17 @@ parse_arguments_v2 :: proc(query: string) -> []Arg {
         append(&args, arg)
         current_index = pos
     }
+
+    for &arg in args {
+        arg.value = strip_quotes(arg.value)
+    }
     return args[:]
+}
+
+strip_quotes :: proc(arg: string) -> string {
+    new_arg := arg
+    if is_in(new_arg[0:1], SpecialSymbols) && new_arg[0:1] == new_arg[len(new_arg)-1:] {
+        new_arg = new_arg[1:len(new_arg)-1]
+    }
+    return new_arg
 }

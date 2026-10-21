@@ -149,7 +149,7 @@ main :: proc() {
 
         query := strings.trim_right(string(buf[:total_read]), "\n")
         query = strings.trim(query, " ")
-        args := parse_arguments_v2(query)
+        args := parse_arguments(query)
         command := args[0].value
         
         if command == Commands[Command.EXIT] {
