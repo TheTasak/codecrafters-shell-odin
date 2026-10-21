@@ -47,38 +47,7 @@ get_env_path :: proc(command: string) -> string {
     return ""
 }
 
-parse_arguments :: proc(command: string, args_str: string) -> []string {
-    args := [dynamic]string{}
-    append(&args, command)
-    args_str, _ := strings.replace_all(args_str, "''", "")
 
-    if args_str != "" {
-        start_index : int = 0
-        for {
-            outside_boundary : bool = start_index < len(args_str) - 1
-            if i := strings.index(args_str[start_index:], "'"); i != -1 && outside_boundary {
-                end_index := start_index + i
-                if is_allowed_argument(args_str, start_index, end_index) {
-                    append(&args, args_str[start_index:end_index])
-                }
-                start_index = start_index + i + 1
-            } else if i := strings.index(args_str[start_index:], " "); i != -1 && outside_boundary {
-                end_index := start_index + i
-                if is_allowed_argument(args_str, start_index, end_index) {
-                    append(&args, args_str[start_index:end_index])
-                }
-                start_index = start_index + i + 1
-            } else {
-                if start_index < len(args_str) {
-                    append(&args, args_str[start_index:])
-                }
-                break
-            }
-        }
-        // fmt.printf("ARGS: %s\n", args)
-    }
-    return args[:]
-}
 
 check_external :: proc(command: string) -> (string, bool) {
     if path := get_env_path(command); path != "" {
@@ -87,9 +56,14 @@ check_external :: proc(command: string) -> (string, bool) {
     return "", false
 }
 
-execute_program :: proc(args: []string) {
+execute_program :: proc(args: []Arg) {
+    args_value := [dynamic]string{}
+    for arg in args {
+        append(&args_value, arg.value)
+    }
+
     desc := os.Process_Desc{
-        command = args
+        command = args_value[:]
     }
     state, stdout, stderr, _ := os.process_exec(desc, context.allocator)
     defer delete(stdout)
@@ -107,19 +81,19 @@ is_allowed_argument :: proc(arg: string, start_pos: int, end_pos: int) -> bool {
     return (start_pos != end_pos) && (len(strings.trim(current_arg, " ")) > 0)
 }
 
-echo :: proc(args: ..string) {
+echo :: proc(args: []Arg) {
     for arg in args {
-        fmt.printf("%s ", arg)
+        fmt.printf("%s ", arg.value)
     }
     fmt.printf("\n")
 }
 
-type :: proc(args: []string) {
+type :: proc(args: []Arg) {
     if len(args) < 2 {
         fmt.printf("type: no command specified\n")
         return
     }
-    command := args[1]
+    command := args[0].value
     // locate built-in commands 
     for c in Commands {
         if strings.starts_with(command, c) {
@@ -146,12 +120,12 @@ pwd :: proc() {
     }
 }
 
-cd :: proc(args: []string) {
-    if len(args) < 2 {
+cd :: proc(args: []Arg) {
+    if len(args) == 0 {
         fmt.printf("cd: no directory specified\n")
         return
     }
-    path := args[1]
+    path := args[0].value
     if strings.starts_with(path, "~") {
         buf := [256]u8{}
         path_var := os.get_env_buf(buf[:], "HOME")
@@ -174,26 +148,20 @@ main :: proc() {
         }
 
         query := strings.trim_right(string(buf[:total_read]), "\n")
-        command, args_str : string
-        if i := strings.index(query, " "); i != -1 {
-            command = query[:i]
-            args_str = query[i+1:]
-        } else {
-            command = query
-            args_str = ""
-        }
-        args := parse_arguments(command, args_str)
+        query = strings.trim(query, " ")
+        args := parse_arguments_v2(query)
+        command := args[0].value
         
         if command == Commands[Command.EXIT] {
             break
         } else if command == Commands[Command.ECHO] {
-            echo(strings.join(args[1:], " "))
+            echo(args[1:])
         } else if command == Commands[Command.TYPE] {
-            type(args)
+            type(args[1:])
         } else if command == Commands[Command.PWD] {
             pwd()
         } else if command == Commands[Command.CD] {
-            cd(args)
+            cd(args[1:])
         } else {
             if path, exists := check_external(command); exists {
                 execute_program(args)
