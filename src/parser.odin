@@ -57,6 +57,8 @@ parse_arguments :: proc(query: string) -> []Arg {
         current_index = command_index
         append(&args, arg)
     } else {
+        arg := Arg{value=args_str, start_pos=0, end_pos=len(args_str)-1, type=ARG_DELIMITER}
+        append(&args, arg)
         return args[:]
     }
 
@@ -92,7 +94,7 @@ parse_arguments :: proc(query: string) -> []Arg {
         }
         current_index = pos
     }
-    fmt.printf("ARGS: %s\n", args)
+    // fmt.printf("ARGS: %s\n", args)
 
     for &arg in args {
         arg.value = strip_quotes(arg.value)
@@ -101,7 +103,7 @@ parse_arguments :: proc(query: string) -> []Arg {
 
     args = merge_args(args)
 
-    fmt.printf("MERGED ARGS: %s\n", args)
+    // fmt.printf("MERGED ARGS: %s\n", args)
 
     return args[:]
 }
