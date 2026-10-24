@@ -157,7 +157,7 @@ main :: proc() {
         } else if command == Commands[Command.ECHO] {
             echo(args[1:])
         } else if command == Commands[Command.TYPE] {
-            type(args[1:])
+            type(args)
         } else if command == Commands[Command.PWD] {
             pwd()
         } else if command == Commands[Command.CD] {
