@@ -93,7 +93,7 @@ type :: proc(args: []Arg) {
         fmt.printf("type: no command specified\n")
         return
     }
-    command := args[0].value
+    command := args[1].value
     // locate built-in commands 
     for c in Commands {
         if strings.starts_with(command, c) {
