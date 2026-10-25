@@ -119,11 +119,13 @@ strip_quotes :: proc(arg: string) -> string {
 }
 
 strip_escape_symbols :: proc(arg: string) -> string {
-    escape_rune_str, _ := utf8.encode_rune(ESCAPE_SYMBOL)
-    new_arg, _ := strings.remove_all(arg, string(escape_rune_str[:]))
-    new_arg, _ = strings.remove_all(new_arg, "\"\"")
+    new_arg, _ := strings.remove_all(arg, "\"\"")
     new_arg, _ = strings.remove_all(new_arg, "\'\'")
-    return new_arg
+    split_arg := strings.split(new_arg, "\\\\")
+    for &s in split_arg {
+        s, _ = strings.remove_all(s, "\\")
+    }
+    return strings.join(split_arg, "\\")
 }
 
 merge_args :: proc(args: [dynamic]Arg) -> [dynamic]Arg {
