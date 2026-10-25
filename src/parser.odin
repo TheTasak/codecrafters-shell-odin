@@ -63,42 +63,71 @@ parse_arguments :: proc(query: string) -> []Arg {
     }
 
     for {
-        if current_index+1 < len(args_str) {
-            next_symbol_pos := current_index+1
-            next_symbol := utf8.rune_at(args_str, next_symbol_pos)
+        space_pos := search_for_next_symbol(args_str, ARG_DELIMITER, current_index+1)
+        squote_pos := search_for_next_symbol(args_str, SINGLE_QUOTE, current_index+1)
+        dquote_pos := search_for_next_symbol(args_str, DOUBLE_QUOTE, current_index+1)
+        first_char := utf8.rune_at(args_str, current_index+1)
+        // fmt.printf("FROM: %d:%c, SPACE: %d, S_QUOTE: %d, D_QUOTE: %d\n", current_index+1, first_char, space_pos, squote_pos, dquote_pos)
 
-            if next_symbol == SINGLE_QUOTE || next_symbol == DOUBLE_QUOTE {
-                end_arg_pos := search_for_next_symbol(args_str, next_symbol, next_symbol_pos+1)
-                if end_arg_pos != -1 {
-                    arg := Arg{value=args_str[next_symbol_pos:end_arg_pos+1], start_pos=next_symbol_pos, end_pos=end_arg_pos, type=next_symbol}
-                    append(&args, arg)
-                    current_index = end_arg_pos
-                    continue
-                }
+        if first_char == SINGLE_QUOTE {
+            closing := search_for_next_symbol(args_str, SINGLE_QUOTE, current_index+1+1, escape_symbols=false)
+            arg : Arg
+            if closing != -1 {
+                arg = Arg{value=args_str[current_index+1:closing+1], start_pos=current_index+1, end_pos=closing, type=SINGLE_QUOTE}
+            } else {
+                arg = Arg{value=args_str[current_index+1:], start_pos=current_index+1, end_pos=len(args_str)-1, type=SINGLE_QUOTE}
+                break
             }
-        }
-
-        pos := search_for_next_symbol(args_str, ARG_DELIMITER, current_index+1)
-
-        if pos == -1 {
-            if args[len(args)-1].end_pos < current_index && current_index+1 < len(args_str) {
-                arg := Arg{value=args_str[current_index+1:], start_pos=current_index+1, end_pos=len(args_str)-1, type=ARG_DELIMITER}
+            append(&args, arg)
+            current_index = (closing != -1) ? closing : len(args_str)-1
+        } else if first_char == DOUBLE_QUOTE {
+            closing := search_for_next_symbol(args_str, DOUBLE_QUOTE, current_index+1+1, escape_symbols=false)
+            arg : Arg
+            if closing != -1 {
+                arg = Arg{value=args_str[current_index+1:closing+1], start_pos=current_index+1, end_pos=closing, type=DOUBLE_QUOTE}
+            } else {
+                arg = Arg{value=args_str[current_index+1:], start_pos=current_index+1, end_pos=len(args_str)-1, type=DOUBLE_QUOTE}
+            }
+            append(&args, arg)
+            current_index = (closing != -1) ? closing : len(args_str)-1
+        } else if squote_pos < space_pos && squote_pos != -1 {
+            closing := search_for_next_symbol(args_str, SINGLE_QUOTE, squote_pos+1, escape_symbols=false)
+            arg := Arg{value=args_str[current_index+1:squote_pos], start_pos=current_index+1, end_pos=squote_pos-1, type=ARG_DELIMITER}
+            append(&args, arg)
+            if closing != -1 {
+                arg := Arg{value=args_str[squote_pos:closing+1], start_pos=squote_pos, end_pos=closing, type=SINGLE_QUOTE}
+                append(&args, arg)
+            }
+            current_index = (closing != -1) ? closing : squote_pos
+        } else if dquote_pos < space_pos && dquote_pos != -1 {
+            closing := search_for_next_symbol(args_str, DOUBLE_QUOTE, dquote_pos+1)
+            arg := Arg{value=args_str[current_index+1:dquote_pos], start_pos=current_index+1, end_pos=dquote_pos-1, type=ARG_DELIMITER}
+            append(&args, arg)
+            if closing != -1 {
+                arg := Arg{value=args_str[dquote_pos:closing+1], start_pos=dquote_pos, end_pos=closing, type=DOUBLE_QUOTE}
+                append(&args, arg)
+            }
+            current_index = (closing != -1) ? closing : dquote_pos
+        } else if space_pos != -1 {
+            arg := Arg{value=args_str[current_index+1:space_pos], start_pos=current_index+1, end_pos=space_pos-1, type=ARG_DELIMITER}
+            if arg.start_pos <= arg.end_pos {
+                append(&args, arg)
+            }
+            current_index = space_pos
+        } else {
+            if args[len(args)-1].end_pos <= current_index && current_index+1 < len(args_str) {
+                first_char := utf8.rune_at(args_str, current_index+1)
+                arg_type := (first_char != SINGLE_QUOTE && first_char != DOUBLE_QUOTE) ? ARG_DELIMITER : first_char
+                arg := Arg{value=args_str[current_index+1:], start_pos=current_index+1, end_pos=len(args_str)-1, type=arg_type}
                 append(&args, arg)
             }
             break
         }
-
-        arg := Arg{value=args_str[current_index+1:pos], start_pos=current_index+1, end_pos=pos-1, type=ARG_DELIMITER}
-        if arg.start_pos <= arg.end_pos {
-            append(&args, arg)
-        }
-        current_index = pos
     }
     // fmt.printf("ARGS: %s\n", args)
 
     for &arg in args {
-        arg.value = strip_quotes(arg.value)
-        arg.value = strip_escape_symbols(arg.value)
+        strip_escape_symbols(&arg)
     }
 
     args = merge_args(args)
@@ -108,30 +137,28 @@ parse_arguments :: proc(query: string) -> []Arg {
     return args[:]
 }
 
-strip_quotes :: proc(arg: string) -> string {
-    new_arg := arg
-    first_rune := utf8.rune_at(new_arg, 0)
-    last_rune := utf8.rune_at(new_arg, len(arg)-1)
-    if len(new_arg) > 2 && (first_rune == SINGLE_QUOTE || first_rune == DOUBLE_QUOTE) && first_rune == last_rune {
-        new_arg = new_arg[1:len(new_arg)-1]
-    }
-    return new_arg
-}
-
-strip_escape_symbols :: proc(arg: string) -> string {
-    new_arg, _ := strings.remove_all(arg, "\"\"")
+strip_escape_symbols :: proc(arg: ^Arg) {
+    new_arg := arg.value
+    new_arg, _ = strings.remove_all(new_arg, "\"\"")
     new_arg, _ = strings.remove_all(new_arg, "\'\'")
-    split_arg := strings.split(new_arg, "\\\\")
-    for &s in split_arg {
-        s, _ = strings.remove_all(s, "\\")
+    if arg.type == DOUBLE_QUOTE || arg.type == ARG_DELIMITER {
+        if arg.type == DOUBLE_QUOTE {
+            new_arg = new_arg[1:len(new_arg)-1]
+        }
+        split_arg := strings.split(new_arg, "\\\\")
+        for &s in split_arg {
+            s, _ = strings.remove_all(s, "\\")
+        }
+        arg.value = strings.join(split_arg, "\\")
+    } else if arg.type == SINGLE_QUOTE {
+        arg.value = new_arg[1:len(new_arg)-1]
     }
-    return strings.join(split_arg, "\\")
 }
 
 merge_args :: proc(args: [dynamic]Arg) -> [dynamic]Arg {
     new_args := [dynamic]Arg{}
     for i := 0; i < len(args); i += 1 {
-        if i+1 < len(args) && args[i].end_pos+1 == args[i+1].start_pos && args[i].type == args[i+1].type {
+        if i+1 < len(args) && args[i].end_pos+1 == args[i+1].start_pos {
             arg := Arg{value=strings.concatenate({args[i].value, args[i+1].value}), start_pos=args[i].start_pos, end_pos=args[i+1].end_pos}
             append(&new_args, arg)
             i += 1
