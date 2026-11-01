@@ -171,6 +171,8 @@ parse_redirect :: proc(args: []Arg) -> (position: int, type: rune, file: string)
     for arg, index in args {
         if (arg.value == "1>" || arg.value == ">") && index < len(args) {
             return index, STDOUT_REDIRECT, args[index+1].value
+        } else if arg.value == "2>" && index < len(args) {
+            return index, STDERR_REDIRECT, args[index+1].value
         }
     }
     return -1, '_', ""
