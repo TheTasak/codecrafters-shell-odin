@@ -69,26 +69,20 @@ parse_arguments :: proc(query: string) -> []Arg {
         first_char := utf8.rune_at(args_str, current_index+1)
         // fmt.printf("FROM: %d:%c, SPACE: %d, S_QUOTE: %d, D_QUOTE: %d\n", current_index+1, first_char, space_pos, squote_pos, dquote_pos)
 
-        if first_char == SINGLE_QUOTE {
-            closing := search_for_next_symbol(args_str, SINGLE_QUOTE, current_index+1+1, escape_symbols=false)
+        if first_char == SINGLE_QUOTE  || first_char == DOUBLE_QUOTE {
+            type : rune = first_char
+            escape_symbols : bool = type == DOUBLE_QUOTE
+
+            closing := search_for_next_symbol(args_str, type, current_index+1+1, escape_symbols=escape_symbols)
             arg : Arg
             if closing != -1 {
-                arg = Arg{value=args_str[current_index+1:closing+1], start_pos=current_index+1, end_pos=closing, type=SINGLE_QUOTE}
+                arg = Arg{value=args_str[current_index+1:closing+1], start_pos=current_index+1, end_pos=closing, type=type}
+                append(&args, arg)
             } else {
-                arg = Arg{value=args_str[current_index+1:], start_pos=current_index+1, end_pos=len(args_str)-1, type=SINGLE_QUOTE}
+                arg = Arg{value=args_str[current_index+1:], start_pos=current_index+1, end_pos=len(args_str)-1, type=type}
+                append(&args, arg)
                 break
             }
-            append(&args, arg)
-            current_index = (closing != -1) ? closing : len(args_str)-1
-        } else if first_char == DOUBLE_QUOTE {
-            closing := search_for_next_symbol(args_str, DOUBLE_QUOTE, current_index+1+1, escape_symbols=false)
-            arg : Arg
-            if closing != -1 {
-                arg = Arg{value=args_str[current_index+1:closing+1], start_pos=current_index+1, end_pos=closing, type=DOUBLE_QUOTE}
-            } else {
-                arg = Arg{value=args_str[current_index+1:], start_pos=current_index+1, end_pos=len(args_str)-1, type=DOUBLE_QUOTE}
-            }
-            append(&args, arg)
             current_index = (closing != -1) ? closing : len(args_str)-1
         } else if squote_pos < space_pos && squote_pos != -1 {
             closing := search_for_next_symbol(args_str, SINGLE_QUOTE, squote_pos+1, escape_symbols=false)
