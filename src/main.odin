@@ -1,140 +1,8 @@
 package main
 
-import "base:runtime"
 import "core:fmt"
 import "core:os"
 import "core:strings"
-
-Command :: enum {
-    EXIT,
-    ECHO,
-    TYPE,
-    PWD,
-    CD,
-}
-
-Commands :: [Command]string {
-    .EXIT = "exit",
-    .ECHO = "echo",
-    .TYPE = "type",
-    .PWD = "pwd",
-    .CD = "cd"
-}
-
-
-is_executable :: proc(filepath: string) -> bool {
-    if os.exists(filepath){
-        perms, err := os.stat(filepath, context.allocator)
-        defer os.file_info_delete(perms, context.allocator)
-        if .Execute_User in perms.mode && err == nil {
-            return true
-        }
-    }
-    return false
-}
-
-get_env_path :: proc(command: string) -> string {
-    buf := [2048]u8{}
-    path_var := os.get_env_buf(buf[:], "PATH")
-    paths := strings.split(string(path_var), ":")
-    
-    for path in paths {
-        filepath := strings.concatenate({path, "/", command})
-        if is_executable(filepath) {
-            return filepath
-        }
-    }
-    return ""
-}
-
-
-
-check_external :: proc(command: string) -> (string, bool) {
-    if path := get_env_path(command); path != "" {
-        return path, true
-    }
-    return "", false
-}
-
-execute_program :: proc(args: []Arg) {
-    args_value := [dynamic]string{}
-    for arg in args {
-        append(&args_value, arg.value)
-    }
-
-    desc := os.Process_Desc{
-        command = args_value[:]
-    }
-    state, stdout, stderr, _ := os.process_exec(desc, context.allocator)
-    defer delete(stdout)
-    defer delete(stderr)
-
-    if !state.success {
-        fmt.printf("%s", string(stderr))
-    } else {
-        fmt.printf("%s", string(stdout))
-    }
-}
-
-is_allowed_argument :: proc(arg: string, start_pos: int, end_pos: int) -> bool {
-    current_arg := arg[start_pos:end_pos]
-    return (start_pos != end_pos) && (len(strings.trim(current_arg, " ")) > 0)
-}
-
-echo :: proc(args: []Arg) {
-    for arg in args {
-        fmt.printf("%s ", arg.value)
-    }
-    fmt.printf("\n")
-}
-
-type :: proc(args: []Arg) {
-    if len(args) < 2 {
-        fmt.printf("type: no command specified\n")
-        return
-    }
-    command := args[1].value
-    // locate built-in commands 
-    for c in Commands {
-        if strings.starts_with(command, c) {
-            fmt.printf("%s is a shell builtin\n", c)
-            return
-        }
-    }
-
-    // locate executables using PATH
-    path := get_env_path(command)
-    if path != "" {
-        fmt.printf("%s is %s\n", command, path)
-    } else {
-        fmt.printf("%s: not found\n", command)
-    }
-}
-
-pwd :: proc() {
-    path, err := os.get_working_directory(context.temp_allocator)
-    if err != nil {
-        fmt.printf("%s\n", err)
-    } else {
-        fmt.printf("%s\n", path)
-    }
-}
-
-cd :: proc(args: []Arg) {
-    if len(args) == 0 {
-        fmt.printf("cd: no directory specified\n")
-        return
-    }
-    path := args[0].value
-    if strings.starts_with(path, "~") {
-        buf := [256]u8{}
-        path_var := os.get_env_buf(buf[:], "HOME")
-        path, _ = strings.replace(path, "~", path_var, 1)
-    }
-    if err := os.change_directory(path); err != nil {
-        fmt.printf("cd: %s: No such file or directory\n", path)
-    }
-}
 
 main :: proc() {
     buf := [1024]u8{}
@@ -151,23 +19,42 @@ main :: proc() {
         query = strings.trim(query, " ")
         args := parse_arguments(query)
         command := args[0].value
+
+        redirect_pos, redirect_type, redirect_file := parse_redirect(args)
+        if redirect_pos != -1 {
+            args = args[:redirect_pos]
+        }
+
+        output: Output
         
         if command == Commands[Command.EXIT] {
             break
         } else if command == Commands[Command.ECHO] {
-            echo(args[1:])
+            output = echo(args[1:])
         } else if command == Commands[Command.TYPE] {
-            type(args)
+            output = type(args[1:])
         } else if command == Commands[Command.PWD] {
-            pwd()
+            output = pwd()
         } else if command == Commands[Command.CD] {
-            cd(args[1:])
+            output = cd(args[1:])
         } else {
             if path, exists := check_external(command); exists {
-                execute_program(args)
+                output = execute_program(args)
             } else {
-                fmt.printf("%s: command not found\n", command)
+                output = Output{stderr=fmt.aprintf("%s: command not found\n", command)}
             }
+        }
+
+        if redirect_pos != -1 && redirect_type == STDOUT_REDIRECT {
+            save_to_file(redirect_file, output.stdout)
+        } else if len(output.stdout) > 0 {
+            fmt.printf("%s", output.stdout)
+        }
+
+        if redirect_pos != -1 && redirect_type == STDERR_REDIRECT {
+            save_to_file(redirect_file, output.stderr)
+        } else if len(output.stderr) > 0 {
+            fmt.printf("%s", output.stderr)
         }
     }
 }

@@ -9,6 +9,10 @@ DOUBLE_QUOTE : rune = '"'
 ESCAPE_SYMBOL : rune = '\\'
 ARG_DELIMITER : rune = ' '
 
+STDOUT_REDIRECT_ARR : []string = {">", "1>"}
+STDOUT_REDIRECT : rune = '>'
+STDERR_REDIRECT : rune = '<'
+
 Arg :: struct {
     value: string,
     type: rune,
@@ -75,24 +79,19 @@ parse_arguments :: proc(query: string) -> []Arg {
                 break
             }
             current_index = (closing != -1) ? closing : len(args_str)-1
-        } else if squote_pos < space_pos && squote_pos != -1 {
-            closing := search_for_next_symbol(args_str, SINGLE_QUOTE, squote_pos+1, escape_symbols=false)
-            arg := Arg{value=args_str[current_index+1:squote_pos], start_pos=current_index+1, end_pos=squote_pos-1, type=ARG_DELIMITER}
+        } else if (squote_pos < space_pos && squote_pos != -1) || (dquote_pos < space_pos && dquote_pos != -1) {
+            type : rune = (squote_pos < space_pos && squote_pos != -1) ? SINGLE_QUOTE : DOUBLE_QUOTE
+            pos : int = (type == SINGLE_QUOTE) ? squote_pos : dquote_pos
+            escape_symbols : bool = type == DOUBLE_QUOTE
+
+            closing := search_for_next_symbol(args_str, type, pos+1, escape_symbols=escape_symbols)
+            arg := Arg{value=args_str[current_index+1:pos], start_pos=current_index+1, end_pos=pos-1, type=ARG_DELIMITER}
             append(&args, arg)
             if closing != -1 {
-                arg := Arg{value=args_str[squote_pos:closing+1], start_pos=squote_pos, end_pos=closing, type=SINGLE_QUOTE}
+                arg := Arg{value=args_str[pos:closing+1], start_pos=pos, end_pos=closing, type=type}
                 append(&args, arg)
             }
-            current_index = (closing != -1) ? closing : squote_pos
-        } else if dquote_pos < space_pos && dquote_pos != -1 {
-            closing := search_for_next_symbol(args_str, DOUBLE_QUOTE, dquote_pos+1)
-            arg := Arg{value=args_str[current_index+1:dquote_pos], start_pos=current_index+1, end_pos=dquote_pos-1, type=ARG_DELIMITER}
-            append(&args, arg)
-            if closing != -1 {
-                arg := Arg{value=args_str[dquote_pos:closing+1], start_pos=dquote_pos, end_pos=closing, type=DOUBLE_QUOTE}
-                append(&args, arg)
-            }
-            current_index = (closing != -1) ? closing : dquote_pos
+            current_index = (closing != -1) ? closing : pos
         } else if space_pos != -1 {
             arg := Arg{value=args_str[current_index+1:space_pos], start_pos=current_index+1, end_pos=space_pos-1, type=ARG_DELIMITER}
             if arg.start_pos <= arg.end_pos {
@@ -100,14 +99,13 @@ parse_arguments :: proc(query: string) -> []Arg {
             }
             current_index = space_pos
         } else {
-            arg : Arg
             if len(args) == 0 {
-                arg = Arg{value=args_str, start_pos=0, end_pos=len(args_str)-1, type=ARG_DELIMITER}
+                arg := Arg{value=args_str, start_pos=0, end_pos=len(args_str)-1, type=ARG_DELIMITER}
                 append(&args, arg)
             } else if args[len(args)-1].end_pos <= current_index && current_index+1 < len(args_str) {
                 first_char := utf8.rune_at(args_str, current_index+1)
                 arg_type := (first_char != SINGLE_QUOTE && first_char != DOUBLE_QUOTE) ? ARG_DELIMITER : first_char
-                arg = Arg{value=args_str[current_index+1:], start_pos=current_index+1, end_pos=len(args_str)-1, type=arg_type}
+                arg := Arg{value=args_str[current_index+1:], start_pos=current_index+1, end_pos=len(args_str)-1, type=arg_type}
                 append(&args, arg)
             }
             break
@@ -167,4 +165,13 @@ merge_args :: proc(args: [dynamic]Arg) -> [dynamic]Arg {
     arg := Arg{value=current_arg, start_pos=start_pos, end_pos=args[len(args)-1].end_pos, type=args[len(args)-1].type}
     append(&new_args, arg)
     return new_args
+}
+
+parse_redirect :: proc(args: []Arg) -> (position: int, type: rune, file: string) {
+    for arg, index in args {
+        if (arg.value == "1>" || arg.value == ">") && index < len(args) {
+            return index, STDOUT_REDIRECT, args[index+1].value
+        }
+    }
+    return -1, '_', ""
 }
