@@ -152,7 +152,7 @@ save_to_file :: proc(filename: string, content: string, overwrite: bool = true) 
     if overwrite {
         flags = os.File_Flags{.Write, .Trunc}
     } else {
-        flags = os.File_Flags{.Append}
+        flags = os.File_Flags{.Write, .Append}
     }
 
     if os.exists(filename) {

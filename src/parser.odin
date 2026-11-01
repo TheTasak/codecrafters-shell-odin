@@ -167,13 +167,17 @@ merge_args :: proc(args: [dynamic]Arg) -> [dynamic]Arg {
     return new_args
 }
 
-parse_redirect :: proc(args: []Arg) -> (position: int, type: rune, file: string) {
-    for arg, index in args {
-        if (arg.value == "1>" || arg.value == ">") && index < len(args) {
-            return index, STDOUT_REDIRECT, args[index+1].value
-        } else if arg.value == "2>" && index < len(args) {
-            return index, STDERR_REDIRECT, args[index+1].value
+parse_redirect :: proc(args: []Arg) -> (position: int, type: rune, file: string, overwrite: bool) {
+    for i := 0; i < len(args)-1; i += 1 {
+        if args[i].value == "1>" || args[i].value == ">" {
+            return i, STDOUT_REDIRECT, args[i+1].value, true
+        } else if args[i].value == "1>>" || args[i].value == ">>" {
+            return i, STDOUT_REDIRECT, args[i+1].value, false
+        } else if args[i].value == "2>" {
+            return i, STDERR_REDIRECT, args[i+1].value, true
+        } else if args[i].value == "2>>" {
+            return i, STDERR_REDIRECT, args[i+1].value, false
         }
     }
-    return -1, '_', ""
+    return -1, '_', "", false
 }

@@ -20,7 +20,7 @@ main :: proc() {
         args := parse_arguments(query)
         command := args[0].value
 
-        redirect_pos, redirect_type, redirect_file := parse_redirect(args)
+        redirect_pos, redirect_type, redirect_file, overwrite := parse_redirect(args)
         if redirect_pos != -1 {
             args = args[:redirect_pos]
         }
@@ -46,13 +46,13 @@ main :: proc() {
         }
 
         if redirect_pos != -1 && redirect_type == STDOUT_REDIRECT {
-            save_to_file(redirect_file, output.stdout)
+            save_to_file(redirect_file, output.stdout, overwrite)
         } else if len(output.stdout) > 0 {
             fmt.printf("%s", output.stdout)
         }
 
         if redirect_pos != -1 && redirect_type == STDERR_REDIRECT {
-            save_to_file(redirect_file, output.stderr)
+            save_to_file(redirect_file, output.stderr, overwrite)
         } else if len(output.stderr) > 0 {
             fmt.printf("%s", output.stderr)
         }
