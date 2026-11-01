@@ -118,7 +118,6 @@ parse_arguments :: proc(query: string) -> []Arg {
     for &arg in args {
         strip_escape_symbols(&arg)
     }
-
     args = merge_args(args)
 
     // fmt.printf("MERGED ARGS: %s\n", args)
@@ -146,14 +145,26 @@ strip_escape_symbols :: proc(arg: ^Arg) {
 
 merge_args :: proc(args: [dynamic]Arg) -> [dynamic]Arg {
     new_args := [dynamic]Arg{}
-    for i := 0; i < len(args); i += 1 {
-        if i+1 < len(args) && args[i].end_pos+1 == args[i+1].start_pos {
-            arg := Arg{value=strings.concatenate({args[i].value, args[i+1].value}), start_pos=args[i].start_pos, end_pos=args[i+1].end_pos}
-            append(&new_args, arg)
-            i += 1
+
+    if len(args) == 0 {
+        return args
+    }
+
+    current_arg : string = args[0].value
+    start_pos : int = 0
+    for i := 1; i < len(args); i += 1 {
+        if args[i-1].end_pos+1 == args[i].start_pos {
+            current_arg = strings.concatenate({current_arg, args[i].value})
         } else {
-            append(&new_args, args[i])
+            arg := Arg{value=current_arg, start_pos=start_pos, end_pos=args[i-1].end_pos, type=args[i-1].type}
+            append(&new_args, arg)
+
+            current_arg = args[i].value
+            start_pos = args[i].start_pos
         }
     }
+
+    arg := Arg{value=current_arg, start_pos=start_pos, end_pos=args[len(args)-1].end_pos, type=args[len(args)-1].type}
+    append(&new_args, arg)
     return new_args
 }
