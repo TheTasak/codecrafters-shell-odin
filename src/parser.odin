@@ -51,16 +51,7 @@ parse_arguments :: proc(query: string) -> []Arg {
     args_str := query
     args := [dynamic]Arg{}
     
-    current_index : int = 0
-    if command_index := search_for_next_symbol(args_str, ARG_DELIMITER, 0); command_index != -1 {
-        arg := Arg{value=args_str[:command_index], start_pos=0, end_pos=command_index-1, type=ARG_DELIMITER}
-        current_index = command_index
-        append(&args, arg)
-    } else {
-        arg := Arg{value=args_str, start_pos=0, end_pos=len(args_str)-1, type=ARG_DELIMITER}
-        append(&args, arg)
-        return args[:]
-    }
+    current_index : int = -1
 
     for {
         space_pos := search_for_next_symbol(args_str, ARG_DELIMITER, current_index+1)
@@ -109,10 +100,14 @@ parse_arguments :: proc(query: string) -> []Arg {
             }
             current_index = space_pos
         } else {
-            if args[len(args)-1].end_pos <= current_index && current_index+1 < len(args_str) {
+            arg : Arg
+            if len(args) == 0 {
+                arg = Arg{value=args_str, start_pos=0, end_pos=len(args_str)-1, type=ARG_DELIMITER}
+                append(&args, arg)
+            } else if args[len(args)-1].end_pos <= current_index && current_index+1 < len(args_str) {
                 first_char := utf8.rune_at(args_str, current_index+1)
                 arg_type := (first_char != SINGLE_QUOTE && first_char != DOUBLE_QUOTE) ? ARG_DELIMITER : first_char
-                arg := Arg{value=args_str[current_index+1:], start_pos=current_index+1, end_pos=len(args_str)-1, type=arg_type}
+                arg = Arg{value=args_str[current_index+1:], start_pos=current_index+1, end_pos=len(args_str)-1, type=arg_type}
                 append(&args, arg)
             }
             break
