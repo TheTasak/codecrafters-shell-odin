@@ -118,10 +118,14 @@ read_console :: proc() -> (string, bool) {
                 }
             case ch == '\t':
                 compl := search_completion(buffer)
-                append(&buffer, compl)
-                current_pos += len(compl)
-
-                print_line(&buffer, current_pos)
+                if len(compl) == 0 {
+                    fmt.print("\a")
+                } else {
+                    append(&buffer, compl)
+                    current_pos += len(compl)
+    
+                    print_line(&buffer, current_pos)
+                }
             case match.is_cntrl(ch):
                 seq := read_escape_sequence(in_stream)
                 defer delete(seq)
