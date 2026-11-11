@@ -1,5 +1,6 @@
 package main
 
+import "core:sort"
 import "core:text/match"
 import "core:unicode/utf8"
 import "core:io"
@@ -66,11 +67,14 @@ read_escape_sequence :: proc(in_stream: io.Reader) -> string {
 	return string(seq[:])
 }
 
-search_completion :: proc(buff: [dynamic]byte) -> string {
+search_completion :: proc(buff: [dynamic]byte) -> (compl: string, next_line: bool) {
+    possible_compl := make([dynamic]string)
+    defer delete(possible_compl)
+
     args := parse_arguments(string(buff[:]))
     for cmd in Commands {
         if strings.starts_with(cmd, args[0].value) {
-            return strings.concatenate({cmd[len(args[0].value):], " "})
+            append(&possible_compl, cmd)
         } 
     }
     
@@ -82,13 +86,33 @@ search_completion :: proc(buff: [dynamic]byte) -> string {
         }
 
         for file in files {
-            if strings.starts_with(file.name, args[0].value) {
-                return strings.concatenate({file.name[len(args[0].value):], " "})
+            if strings.starts_with(file.name, args[0].value) && is_executable(file.fullpath) {
+                append(&possible_compl, file.name)
             }
         }
     }
 
-    return ""
+    seen := make(map[string]bool)
+    defer delete(seen)
+    uniq_compl := make([dynamic]string, context.temp_allocator)
+    defer delete(uniq_compl)
+
+    for compl in possible_compl {
+        if !seen[compl] {
+            seen[compl] = true
+            append(&uniq_compl, compl)
+        }
+    }
+
+    sort.quick_sort(uniq_compl[:])
+
+    if len(uniq_compl) > 1 {
+        return strings.join(uniq_compl[:], "  "), true
+    } else if len(uniq_compl) == 1 {
+        return strings.concatenate({uniq_compl[0][len(args[0].value):], " "}), false
+    }
+
+    return "", false
 }
 
 read_console :: proc() -> (string, bool) {
@@ -101,6 +125,7 @@ read_console :: proc() -> (string, bool) {
     
 	current_pos := 0
     in_stream := os.to_stream(os.stdin)
+    previous_symbol := ' '
 
     for {
         ch, size, err := io.read_rune(in_stream)
@@ -131,14 +156,25 @@ read_console :: proc() -> (string, bool) {
                     print_line(&buffer, current_pos)
                 }
             case ch == '\t':
-                compl := search_completion(buffer)
-                if len(compl) == 0 {
-                    fmt.print("\a")
+                compl, is_multi_compl := search_completion(buffer)
+                is_previous_compl : bool = previous_symbol == '\t'
+
+                if is_multi_compl {
+                    if is_previous_compl {
+                        fmt.printfln("\n%s", compl)
+                        print_line(&buffer, current_pos)
+                    } else {
+                        fmt.print("\a")
+                    }
                 } else {
-                    append(&buffer, compl)
-                    current_pos += len(compl)
-    
-                    print_line(&buffer, current_pos)
+                    if len(compl) == 0 {
+                        fmt.print("\a")
+                    } else {
+                        append(&buffer, compl)
+                        current_pos += len(compl)
+        
+                        print_line(&buffer, current_pos)
+                    }
                 }
             case match.is_cntrl(ch):
                 seq := read_escape_sequence(in_stream)
@@ -161,5 +197,6 @@ read_console :: proc() -> (string, bool) {
 
                 print_line(&buffer, current_pos)
         }
+        previous_symbol = ch
     }
 }
