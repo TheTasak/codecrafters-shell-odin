@@ -1,22 +1,12 @@
 package main
 
 import "core:fmt"
-import "core:os"
 import "core:strings"
 
 main :: proc() {
-    buf := [1024]u8{}
     for {
-        fmt.printf("$ ")
-        
-        total_read, err := os.read(os.stdin, buf[:])
-        if err != nil {
-            fmt.println(err)
-            panic("something went wrong")
-        }
-
-        query := strings.trim_right(string(buf[:total_read]), "\n")
-        query = strings.trim(query, " ")
+        buf, _ := read_console()
+        query := strings.trim(buf, " ")
         args := parse_arguments(query)
         command := args[0].value
 
