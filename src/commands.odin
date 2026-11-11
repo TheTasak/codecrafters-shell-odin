@@ -41,10 +41,14 @@ is_executable :: proc(filepath: string) -> bool {
     return false
 }
 
-get_env_path :: proc(command: string) -> string {
-    buf := [2048]u8{}
-    path_var := os.get_env_buf(buf[:], "PATH")
+list_env_paths :: proc() -> []string {
+    path_var := os.get_env_alloc("PATH", context.temp_allocator)
     paths := strings.split(string(path_var), ":")
+    return paths
+}
+
+get_env_path :: proc(command: string) -> string {
+    paths := list_env_paths()
     
     for path in paths {
         filepath := strings.concatenate({path, "/", command})
@@ -54,8 +58,6 @@ get_env_path :: proc(command: string) -> string {
     }
     return ""
 }
-
-
 
 check_external :: proc(command: string) -> (string, bool) {
     if path := get_env_path(command); path != "" {
@@ -79,11 +81,6 @@ execute_program :: proc(args: []Arg) -> Output {
     }
 
     return Output{stdout=string(stdout), stderr=string(stderr)}
-}
-
-is_allowed_argument :: proc(arg: string, start_pos: int, end_pos: int) -> bool {
-    current_arg := arg[start_pos:end_pos]
-    return (start_pos != end_pos) && (len(strings.trim(current_arg, " ")) > 0)
 }
 
 echo :: proc(args: []Arg) -> Output {

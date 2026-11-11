@@ -68,12 +68,26 @@ read_escape_sequence :: proc(in_stream: io.Reader) -> string {
 
 search_completion :: proc(buff: [dynamic]byte) -> string {
     args := parse_arguments(string(buff[:]))
-    // fmt.printfln("%x", args)
     for cmd in Commands {
         if strings.starts_with(cmd, args[0].value) {
             return strings.concatenate({cmd[len(args[0].value):], " "})
         } 
     }
+    
+    external_paths := list_env_paths()
+    for path in external_paths {
+        files, err := os.read_all_directory_by_path(path, context.allocator)
+        if err != nil {
+            continue
+        }
+
+        for file in files {
+            if strings.starts_with(file.name, args[0].value) {
+                return strings.concatenate({file.name[len(args[0].value):], " "})
+            }
+        }
+    }
+
     return ""
 }
 
