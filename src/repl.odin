@@ -67,11 +67,30 @@ read_escape_sequence :: proc(in_stream: io.Reader) -> string {
 	return string(seq[:])
 }
 
-search_completion :: proc(buff: [dynamic]byte) -> (compl: string, next_line: bool) {
-    possible_compl := make([dynamic]string)
-    defer delete(possible_compl)
+longest_common_prefix :: proc(options: []string) -> string {
+    if len(options) <= 1 {
+        return ""
+    }
 
-    args := parse_arguments(string(buff[:]))
+    min_length : int
+    for opt in options {
+        if len(opt) < min_length do min_length = len(opt)
+    }
+
+    for letter, letter_index in options[0] {
+        for i := 1; i < len(options); i += 1 {
+            if letter != rune(options[i][letter_index]) {
+                return options[0][:letter_index]
+            }
+        }
+    }
+    return options[0]
+}
+
+get_all_completions :: proc(args: []Arg) -> [dynamic]string {
+    possible_compl := make([dynamic]string)
+
+    
     for cmd in Commands {
         if strings.starts_with(cmd, args[0].value) {
             append(&possible_compl, cmd)
@@ -91,6 +110,13 @@ search_completion :: proc(buff: [dynamic]byte) -> (compl: string, next_line: boo
             }
         }
     }
+    return possible_compl
+}
+
+search_completion :: proc(buff: [dynamic]byte) -> (compl: string, next_line: bool) {
+    args := parse_arguments(string(buff[:]))
+    possible_compl := get_all_completions(args)
+    defer delete(possible_compl)
 
     seen := make(map[string]bool)
     defer delete(seen)
@@ -105,6 +131,11 @@ search_completion :: proc(buff: [dynamic]byte) -> (compl: string, next_line: boo
     }
 
     sort.quick_sort(uniq_compl[:])
+    prefix := longest_common_prefix(uniq_compl[:])
+
+    if len(prefix) > len(args[0].value) {
+        return prefix[len(args[0].value):], false
+    }
 
     if len(uniq_compl) > 1 {
         return strings.join(uniq_compl[:], "  "), true
