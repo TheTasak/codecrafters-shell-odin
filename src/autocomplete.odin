@@ -10,26 +10,26 @@ longest_common_prefix :: proc(options: []string) -> string {
         return ""
     }
 
-    min_length : int
+    min_length : int = len(options[0])
     for opt in options {
         if len(opt) < min_length do min_length = len(opt)
     }
 
-    for letter, letter_index in options[0] {
-        for i := 1; i < len(options); i += 1 {
-            if letter != rune(options[i][letter_index]) {
-                return options[0][:letter_index]
+    for letter_i := 0; letter_i < min_length; letter_i += 1 {
+        for option_i := 1; option_i < len(options); option_i += 1 {
+            if options[0][letter_i] != options[option_i][letter_i] {
+                return options[0][:letter_i]
             }
         }
     }
-    return options[0]
+    return options[0][:min_length]
 }
 
-get_command_completions :: proc(args: []Arg) -> [dynamic]string {
+get_command_completions :: proc(prefix: string) -> [dynamic]string {
     possible_compl := make([dynamic]string)
     
     for cmd in Commands {
-        if strings.starts_with(cmd, args[0].value) {
+        if strings.starts_with(cmd, prefix) {
             append(&possible_compl, cmd)
         } 
     }
@@ -42,7 +42,7 @@ get_command_completions :: proc(args: []Arg) -> [dynamic]string {
         }
 
         for file in files {
-            if strings.starts_with(file.name, args[0].value) && is_executable(file.fullpath) {
+            if strings.starts_with(file.name, prefix) && is_executable(file.fullpath) {
                 append(&possible_compl, file.name)
             }
         }
@@ -50,32 +50,38 @@ get_command_completions :: proc(args: []Arg) -> [dynamic]string {
     return possible_compl
 }
 
-get_file_completions :: proc(args: []Arg) -> [dynamic]string {
+get_file_completions :: proc(prefix: string) -> [dynamic]string {
+    prefix_string := prefix
     possible_compl := make([dynamic]string)
 
-    last_arg := args[len(args)-1]
     directory, wd_err := os.get_working_directory(context.temp_allocator)
     if wd_err != nil {
         fmt.eprintfln("%s", wd_err)
         return possible_compl
     }
 
-    dir_obj, open_err := os.open(directory)
-    if open_err != nil {
-        fmt.eprintfln("%s", open_err)
-        return possible_compl
+    dir_index := strings.last_index(prefix_string, "/")
+    if dir_index != -1 {
+        directory = strings.concatenate({directory, "/", prefix_string[:dir_index]})
+        prefix_string = prefix_string[dir_index+1:]
     }
 
-    file_info, err := os.read_all_directory(dir_obj, context.allocator)
+    file_info, err := os.read_all_directory_by_path(directory, context.allocator)
     if err != nil {
         fmt.eprintfln("%s", err)
         return possible_compl
     }
 
     for file in file_info {
-        if strings.starts_with(file.name, last_arg.value) {
-            fmt.printf("%s ", file.name)
-            append(&possible_compl, file.name)
+        if strings.starts_with(file.name, prefix_string) {
+            // fmt.printfln("%s, %s", file.name, prefix_string)
+            completion : string
+            if dir_index != -1 {
+                completion = strings.concatenate({prefix[:dir_index], "/", file.name})
+            } else {
+                completion = file.name
+            }
+            append(&possible_compl, completion)
         }
     }
     return possible_compl
@@ -84,17 +90,19 @@ get_file_completions :: proc(args: []Arg) -> [dynamic]string {
 search_completion :: proc(buff: [dynamic]byte, cursor_pos: int) -> (compl: string, next_line: bool) {
     args := parse_arguments(string(buff[:]))
     // TODO: add choosing the argument based on cursor position, so that mid string completions are possible
-    current_arg := args[len(args)-1] 
+    current_arg := args[len(args)-1].value
 
     possible_compl : [dynamic]string
-    if len(args) > 1 {
-        possible_compl = get_file_completions(args)
+    if args[len(args)-1].end_pos + 1 < cursor_pos { // new argument started without any chars
+        possible_compl = get_file_completions("")
+    } else if len(args) > 1 {
+        possible_compl = get_file_completions(current_arg)
     } else {
-        possible_compl = get_command_completions(args)
+        possible_compl = get_command_completions(current_arg)
     }
     defer delete(possible_compl)
 
-    seen := make(map[string]bool)
+    seen := make(map[string]bool, context.temp_allocator)
     defer delete(seen)
     uniq_compl := make([dynamic]string, context.temp_allocator)
     defer delete(uniq_compl)
@@ -106,17 +114,16 @@ search_completion :: proc(buff: [dynamic]byte, cursor_pos: int) -> (compl: strin
         }
     }
 
-    sort.quick_sort(uniq_compl[:])
     prefix := longest_common_prefix(uniq_compl[:])
-
-    if len(prefix) > len(current_arg.value) {
-        return prefix[len(current_arg.value):], false
+    if len(prefix) > len(current_arg) {
+        return prefix[len(current_arg):], false
     }
 
     if len(uniq_compl) > 1 {
+        sort.quick_sort(uniq_compl[:])
         return strings.join(uniq_compl[:], "  "), true
     } else if len(uniq_compl) == 1 {
-        return strings.concatenate({uniq_compl[0][len(current_arg.value):], " "}), false
+        return strings.concatenate({uniq_compl[0][len(current_arg):], " "}), false
     }
 
     return "", false
