@@ -1,13 +1,11 @@
 package main
 
-import "core:sort"
 import "core:text/match"
 import "core:unicode/utf8"
 import "core:io"
 import "core:os"
 import "core:sys/posix"
 import "core:fmt"
-import "core:strings"
 
 CURSOR_PREFIX :: "$"
 CURSOR_PREFIX_OFFSET :: 2
@@ -67,85 +65,6 @@ read_escape_sequence :: proc(in_stream: io.Reader) -> string {
 	return string(seq[:])
 }
 
-longest_common_prefix :: proc(options: []string) -> string {
-    if len(options) <= 1 {
-        return ""
-    }
-
-    min_length : int
-    for opt in options {
-        if len(opt) < min_length do min_length = len(opt)
-    }
-
-    for letter, letter_index in options[0] {
-        for i := 1; i < len(options); i += 1 {
-            if letter != rune(options[i][letter_index]) {
-                return options[0][:letter_index]
-            }
-        }
-    }
-    return options[0]
-}
-
-get_all_completions :: proc(args: []Arg) -> [dynamic]string {
-    possible_compl := make([dynamic]string)
-
-    
-    for cmd in Commands {
-        if strings.starts_with(cmd, args[0].value) {
-            append(&possible_compl, cmd)
-        } 
-    }
-    
-    external_paths := list_env_paths()
-    for path in external_paths {
-        files, err := os.read_all_directory_by_path(path, context.allocator)
-        if err != nil {
-            continue
-        }
-
-        for file in files {
-            if strings.starts_with(file.name, args[0].value) && is_executable(file.fullpath) {
-                append(&possible_compl, file.name)
-            }
-        }
-    }
-    return possible_compl
-}
-
-search_completion :: proc(buff: [dynamic]byte) -> (compl: string, next_line: bool) {
-    args := parse_arguments(string(buff[:]))
-    possible_compl := get_all_completions(args)
-    defer delete(possible_compl)
-
-    seen := make(map[string]bool)
-    defer delete(seen)
-    uniq_compl := make([dynamic]string, context.temp_allocator)
-    defer delete(uniq_compl)
-
-    for compl in possible_compl {
-        if !seen[compl] {
-            seen[compl] = true
-            append(&uniq_compl, compl)
-        }
-    }
-
-    sort.quick_sort(uniq_compl[:])
-    prefix := longest_common_prefix(uniq_compl[:])
-
-    if len(prefix) > len(args[0].value) {
-        return prefix[len(args[0].value):], false
-    }
-
-    if len(uniq_compl) > 1 {
-        return strings.join(uniq_compl[:], "  "), true
-    } else if len(uniq_compl) == 1 {
-        return strings.concatenate({uniq_compl[0][len(args[0].value):], " "}), false
-    }
-
-    return "", false
-}
-
 read_console :: proc() -> (string, bool) {
     enable_raw_mode()
     defer disable_raw_mode()
@@ -187,13 +106,14 @@ read_console :: proc() -> (string, bool) {
                     print_line(&buffer, current_pos)
                 }
             case ch == '\t':
-                compl, is_multi_compl := search_completion(buffer)
+                compl, is_multi_compl := search_completion(buffer, current_pos)
                 is_previous_compl : bool = previous_symbol == '\t'
 
                 if is_multi_compl {
                     if is_previous_compl {
                         fmt.printfln("\n%s", compl)
                         print_line(&buffer, current_pos)
+                        previous_symbol = ' '
                     } else {
                         fmt.print("\a")
                     }
