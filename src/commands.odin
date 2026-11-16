@@ -12,7 +12,8 @@ Command :: enum {
     TYPE,
     PWD,
     CD,
-    WRITE
+    WRITE,
+    COMPLETE,
 }
 
 Commands :: [Command]string {
@@ -21,7 +22,8 @@ Commands :: [Command]string {
     .TYPE = "type",
     .PWD = "pwd",
     .CD = "cd",
-    .WRITE = "write"
+    .WRITE = "write",
+    .COMPLETE = "complete"
 }
 
 Output :: struct {
@@ -167,5 +169,9 @@ save_to_file :: proc(filename: string, content: string, overwrite: bool = true) 
     if error != nil {
         return Output{stderr=os.error_string(error)}
     }
+    return Output{}
+}
+
+complete :: proc() -> Output {
     return Output{}
 }
