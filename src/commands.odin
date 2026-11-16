@@ -172,6 +172,15 @@ save_to_file :: proc(filename: string, content: string, overwrite: bool = true) 
     return Output{}
 }
 
-complete :: proc() -> Output {
+complete :: proc(args: []Arg) -> Output {
+    if !args[0].is_flag {
+        return Output{}
+    }
+    switch args[0].value {
+        case "-p":
+            if len(args) > 1 {
+                return Output{stderr=fmt.aprintf("complete: %s: no completion specification\n", args[1].value)}
+            }
+    }
     return Output{}
 }

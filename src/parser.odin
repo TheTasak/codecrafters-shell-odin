@@ -18,6 +18,7 @@ Arg :: struct {
     type: rune,
     start_pos: int,
     end_pos: int,
+    is_flag: bool,
 }
 
 is_in :: proc(str: string, arr: []string) -> bool {
@@ -117,6 +118,10 @@ parse_arguments :: proc(query: string) -> []Arg {
         strip_escape_symbols(&arg)
     }
     args = merge_args(args)
+
+    for &arg in args {
+        arg.is_flag = arg.value[0] == '-'
+    }
 
     // fmt.printf("MERGED ARGS: %s\n", args)
 
