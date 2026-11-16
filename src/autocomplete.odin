@@ -74,12 +74,16 @@ get_file_completions :: proc(prefix: string) -> [dynamic]string {
 
     for file in file_info {
         if strings.starts_with(file.name, prefix_string) {
-            // fmt.printfln("%s, %s", file.name, prefix_string)
             completion : string
+            file_path := file.name
+            if file.type == os.File_Type.Directory {
+                file_path = strings.concatenate({file_path, "/"})
+            }
+
             if dir_index != -1 {
-                completion = strings.concatenate({prefix[:dir_index], "/", file.name})
+                completion = strings.concatenate({prefix[:dir_index], "/", file_path})
             } else {
-                completion = file.name
+                completion = file_path
             }
             append(&possible_compl, completion)
         }
@@ -91,9 +95,10 @@ search_completion :: proc(buff: [dynamic]byte, cursor_pos: int) -> (compl: strin
     args := parse_arguments(string(buff[:]))
     // TODO: add choosing the argument based on cursor position, so that mid string completions are possible
     current_arg := args[len(args)-1].value
+    is_empty_arg : bool = (args[len(args)-1].end_pos + 1 < cursor_pos)
 
     possible_compl : [dynamic]string
-    if args[len(args)-1].end_pos + 1 < cursor_pos { // new argument started without any chars
+    if is_empty_arg { // new argument started without any chars
         possible_compl = get_file_completions("")
     } else if len(args) > 1 {
         possible_compl = get_file_completions(current_arg)
@@ -115,6 +120,7 @@ search_completion :: proc(buff: [dynamic]byte, cursor_pos: int) -> (compl: strin
     }
 
     prefix := longest_common_prefix(uniq_compl[:])
+
     if len(prefix) > len(current_arg) {
         return prefix[len(current_arg):], false
     }
@@ -123,7 +129,19 @@ search_completion :: proc(buff: [dynamic]byte, cursor_pos: int) -> (compl: strin
         sort.quick_sort(uniq_compl[:])
         return strings.join(uniq_compl[:], "  "), true
     } else if len(uniq_compl) == 1 {
-        return strings.concatenate({uniq_compl[0][len(current_arg):], " "}), false
+        compl_last_char := uniq_compl[0][len(uniq_compl[0])-1]
+        compl_value : string
+        if is_empty_arg {
+            compl_value = uniq_compl[0]
+        } else {
+            compl_value = uniq_compl[0][len(current_arg):]
+        }
+
+        if compl_last_char == '/' {
+            return compl_value, false
+        } else {
+            return strings.concatenate({compl_value, " "}), false
+        }
     }
 
     return "", false
