@@ -65,7 +65,7 @@ read_escape_sequence :: proc(in_stream: io.Reader) -> string {
 	return string(seq[:])
 }
 
-read_console :: proc() -> (string, bool) {
+read_console :: proc(registered_completions: ^map[string]string) -> (string, bool) {
     enable_raw_mode()
     defer disable_raw_mode()
 
@@ -106,7 +106,7 @@ read_console :: proc() -> (string, bool) {
                     print_line(&buffer, current_pos)
                 }
             case ch == '\t':
-                compl, is_multi_compl := search_completion(buffer, current_pos)
+                compl, is_multi_compl := search_completion(buffer, registered_completions, current_pos)
                 is_previous_compl : bool = previous_symbol == '\t'
 
                 if is_multi_compl {

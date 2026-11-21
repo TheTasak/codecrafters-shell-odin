@@ -8,7 +8,7 @@ main :: proc() {
     defer delete(registered_completions)
 
     for {
-        buf, _ := read_console()
+        buf, _ := read_console(&registered_completions)
         query := strings.trim(buf, " ")
         args := parse_arguments(query)
         command := args[0].value
