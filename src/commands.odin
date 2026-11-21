@@ -1,6 +1,5 @@
 package main
 
-import "core:unicode/utf8"
 import "base:runtime"
 import "core:fmt"
 import "core:os"
@@ -172,15 +171,30 @@ save_to_file :: proc(filename: string, content: string, overwrite: bool = true) 
     return Output{}
 }
 
-complete :: proc(args: []Arg) -> Output {
-    if !args[0].is_flag {
-        return Output{}
+complete :: proc(args: []Arg, registered_completions: ^map[string]string) -> Output {
+    flags := make_map(map[string]Flag)
+    flags["-C"] = Flag{name = "-C", num_args = 2, arguments = {}}
+    flags["-p"] = Flag{name = "-p", num_args = 1, arguments = {}}
+
+    err := parse_flags(args, &flags)
+    if err != nil {
+        // would be cool to print the text that is related to the error from parsing
+        return Output{stderr="complete: error\n"}
     }
-    switch args[0].value {
-        case "-p":
-            if len(args) > 1 {
-                return Output{stderr=fmt.aprintf("complete: %s: no completion specification\n", args[1].value)}
+
+    for key, flag in flags {
+        if key == "-p" {
+            compl_type := flag.arguments[0].value
+            if compl_type in registered_completions {
+                compl := registered_completions[compl_type]
+                return Output{stdout=fmt.aprintf("complete -C '%s' %s\n", compl, compl_type)}
+            } else {
+                return Output{stderr=fmt.aprintf("complete: %s: no completion specification\n", compl_type)}
             }
+        } else if key == "-C" {
+            registered_completions[flag.arguments[1].value] = flag.arguments[0].value
+            return Output{}
+        }
     }
-    return Output{}
+    return Output{stdout=""}
 }

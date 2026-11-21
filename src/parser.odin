@@ -1,7 +1,6 @@
 package main
 
 import "core:strings"
-import "core:fmt"
 import "core:unicode/utf8"
 
 SINGLE_QUOTE : rune = '\''
@@ -18,15 +17,42 @@ Arg :: struct {
     type: rune,
     start_pos: int,
     end_pos: int,
-    is_flag: bool,
 }
 
-is_in :: proc(str: string, arr: []string) -> bool {
+Flag :: struct {
+    name: string,
+    usage: string,
+    is_required: bool,
+    num_args: int,
+    arguments: [dynamic]Arg
+}
+
+Error :: union #shared_nil {
+    FlagParseError
+}
+
+FlagParseError :: enum {
+    NONE = 0,
+    NOT_ENOUGH_ARGS,
+    TOO_MANY_ARGS,
+    FLAG_NOT_EXISTS
+}
+
+str_is_in :: proc(val: string, arr: []string) -> bool {
     for element in arr {
-        if str == element do return true
+        if val == element do return true
     }
     return false
 }
+
+num_is_in :: proc(val: int, arr: []int) -> bool {
+    for element in arr {
+        if val == element do return true
+    }
+    return false
+}
+
+is_in :: proc{str_is_in, num_is_in}
 
 search_for_next_symbol :: proc(str: string, symbol: rune, start_pos: int, escape_symbols: bool = true) -> int {
     current_pos: int = start_pos
@@ -119,10 +145,6 @@ parse_arguments :: proc(query: string) -> []Arg {
     }
     args = merge_args(args)
 
-    for &arg in args {
-        arg.is_flag = arg.value[0] == '-'
-    }
-
     // fmt.printf("MERGED ARGS: %s\n", args)
 
     return args[:]
@@ -185,4 +207,47 @@ parse_redirect :: proc(args: []Arg) -> (position: int, type: rune, file: string,
         }
     }
     return -1, '_', "", false
+}
+
+append_flag_arg :: proc(flags: ^map[string]Flag, name: string, value: Arg) {
+    flag := (flags^)[name]
+    append_elem(&flag.arguments, value)
+    (flags^)[name] = flag
+}
+
+parse_flags :: proc(args: []Arg, flags: ^map[string]Flag) -> Error {
+    for arg_index := 0; arg_index < len(args); arg_index += 1 {
+        arg := args[arg_index]
+        if !strings.starts_with(arg.value, "-") {
+            // not a flag
+            continue
+        }
+        if arg.value not_in flags {
+            return FlagParseError.FLAG_NOT_EXISTS
+        }
+        current_flag := flags[arg.value]
+        for i := 0; i < current_flag.num_args && len(current_flag.arguments) < current_flag.num_args; i += 1 {
+            if arg_index + 1 < len(args) {
+                arg_index += 1
+                append_flag_arg(flags, arg.value, args[arg_index])
+            } else {
+                return FlagParseError.NOT_ENOUGH_ARGS
+            }
+        }
+    }
+
+    for key, value in flags {
+        if value.is_required {
+            if len(value.arguments) < value.num_args do return FlagParseError.NOT_ENOUGH_ARGS
+            else if len(value.arguments) > value.num_args do return FlagParseError.TOO_MANY_ARGS
+        } else {
+            if len(value.arguments) > 0 && value.num_args > 0 {
+                if len(value.arguments) < value.num_args do return FlagParseError.NOT_ENOUGH_ARGS
+                else if len(value.arguments) > value.num_args do return FlagParseError.TOO_MANY_ARGS
+            } else {
+                delete_key(flags, key)
+            }
+        }
+    }
+    return FlagParseError.NONE
 }

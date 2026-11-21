@@ -4,6 +4,9 @@ import "core:fmt"
 import "core:strings"
 
 main :: proc() {
+    registered_completions := make(map[string]string)
+    defer delete(registered_completions)
+
     for {
         buf, _ := read_console()
         query := strings.trim(buf, " ")
@@ -28,7 +31,7 @@ main :: proc() {
         } else if command == Commands[Command.CD] {
             output = cd(args[1:])
         } else if command == Commands[Command.COMPLETE] {
-            output = complete(args[1:])
+            output = complete(args[1:], &registered_completions)
         } else {
             if path, exists := check_external(command); exists {
                 output = execute_program(args)

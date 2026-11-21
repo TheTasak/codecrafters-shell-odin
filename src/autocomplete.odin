@@ -129,11 +129,8 @@ search_completion :: proc(buff: [dynamic]byte, cursor_pos: int) -> (compl: strin
         sort.quick_sort(uniq_compl[:])
         return strings.join(uniq_compl[:], "  "), true
     } else if len(uniq_compl) == 1 {
-        compl_value : string = uniq_compl[0]
-        compl_last_char : rune = rune(compl_value[len(uniq_compl[0])-1])
-        if !is_empty_arg {
-            compl_value = compl_value[len(current_arg):]
-        }
+        compl_value : string = is_empty_arg ? uniq_compl[0] : uniq_compl[0][len(current_arg):]
+        compl_last_char := rune(compl_value[len(compl_value)-1])
 
         if compl_last_char == '/' {
             return compl_value, false
