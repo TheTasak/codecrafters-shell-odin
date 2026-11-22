@@ -112,8 +112,6 @@ get_custom_completions :: proc(args: []Arg, full_line: string, cursor_pos: int, 
     argv2 := len(args) > 0 ? args[len(args)-1].value : ""
     argv3 := len(args) > 1 ? args[len(args)-2].value : ""
 
-    // fmt.printfln("%s, %s, %s", argv1, argv2, argv3)
-
     process_desc := os.Process_Desc{
         command={program_filepath, argv1, argv2, argv3},
         env={fmt.aprintf("COMP_LINE=%s", full_line), fmt.aprintf("COMP_POINT=%d", cursor_pos)}

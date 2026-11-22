@@ -219,7 +219,7 @@ parse_flags :: proc(args: []Arg, flags: ^map[string]Flag) -> Error {
     for arg_index := 0; arg_index < len(args); arg_index += 1 {
         arg := args[arg_index]
         if !strings.starts_with(arg.value, "-") {
-            // not a flag
+            append_flag_arg(flags, "other", arg)
             continue
         }
         if arg.value not_in flags {

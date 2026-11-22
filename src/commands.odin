@@ -173,9 +173,9 @@ save_to_file :: proc(filename: string, content: string, overwrite: bool = true) 
 
 complete :: proc(args: []Arg, registered_completions: ^map[string]string) -> Output {
     flags := make_map(map[string]Flag)
-    flags["-C"] = Flag{name = "-C", num_args = 2, arguments = {}}
-    flags["-p"] = Flag{name = "-p", num_args = 1, arguments = {}}
-    flags["-r"] = Flag{name = "-r", num_args = 1, arguments = {}}
+    flags["-C"] = Flag{name = "C", num_args = 2, arguments = {}}
+    flags["-p"] = Flag{name = "p", num_args = 1, arguments = {}}
+    flags["-r"] = Flag{name = "r", num_args = 1, arguments = {}}
 
     err := parse_flags(args, &flags)
     if err != nil {
