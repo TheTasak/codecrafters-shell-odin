@@ -175,6 +175,7 @@ complete :: proc(args: []Arg, registered_completions: ^map[string]string) -> Out
     flags := make_map(map[string]Flag)
     flags["-C"] = Flag{name = "-C", num_args = 2, arguments = {}}
     flags["-p"] = Flag{name = "-p", num_args = 1, arguments = {}}
+    flags["-r"] = Flag{name = "-r", num_args = 1, arguments = {}}
 
     err := parse_flags(args, &flags)
     if err != nil {
@@ -194,6 +195,8 @@ complete :: proc(args: []Arg, registered_completions: ^map[string]string) -> Out
         } else if key == "-C" {
             registered_completions[flag.arguments[1].value] = flag.arguments[0].value
             return Output{}
+        } else if key == "-r" {
+            delete_key(registered_completions, flag.arguments[0].value)
         }
     }
     return Output{stdout=""}
