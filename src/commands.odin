@@ -13,6 +13,7 @@ Command :: enum {
     CD,
     WRITE,
     COMPLETE,
+    JOBS
 }
 
 Commands :: [Command]string {
@@ -22,7 +23,8 @@ Commands :: [Command]string {
     .PWD = "pwd",
     .CD = "cd",
     .WRITE = "write",
-    .COMPLETE = "complete"
+    .COMPLETE = "complete",
+    .JOBS = "jobs"
 }
 
 Output :: struct {
@@ -200,4 +202,8 @@ complete :: proc(args: []Arg, registered_completions: ^map[string]string) -> Out
         }
     }
     return Output{stdout=""}
+}
+
+jobs :: proc() -> Output {
+    return Output{}
 }

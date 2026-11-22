@@ -32,6 +32,8 @@ main :: proc() {
             output = cd(args[1:])
         } else if command == Commands[Command.COMPLETE] {
             output = complete(args[1:], &registered_completions)
+        } else if command == Commands[Command.JOBS] {
+            output = jobs()
         } else {
             if path, exists := check_external(command); exists {
                 output = execute_program(args)
