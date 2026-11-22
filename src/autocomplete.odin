@@ -105,7 +105,7 @@ get_file_completions :: proc(prefix: string) -> [dynamic]string {
     return possible_compl
 }
 
-get_custom_completions :: proc(args: []Arg, program_filepath: string) -> [dynamic]string {
+get_custom_completions :: proc(args: []Arg, full_line: string, cursor_pos: int, program_filepath: string) -> [dynamic]string {
     possible_compl := make([dynamic]string, context.allocator)
 
     argv1 := len(args) > 0 ? args[0].value : ""
@@ -114,7 +114,10 @@ get_custom_completions :: proc(args: []Arg, program_filepath: string) -> [dynami
 
     // fmt.printfln("%s, %s, %s", argv1, argv2, argv3)
 
-    process_desc := os.Process_Desc{command={program_filepath, argv1, argv2, argv3}}
+    process_desc := os.Process_Desc{
+        command={program_filepath, argv1, argv2, argv3},
+        env={fmt.aprintf("COMP_LINE=%s", full_line), fmt.aprintf("COMP_POINT=%d", cursor_pos)}
+    }
     state, stdout, stderr, err := os.process_exec(process_desc, context.allocator)
     // stdout should be freed, think how, it now fucks up the compl list if deleted
     // defer delete(stdout)
@@ -144,7 +147,7 @@ search_completion :: proc(buff: [dynamic]byte, registered_completions: ^map[stri
     defer delete(possible_compl)
     
     if args[0].value in registered_completions {
-        possible_compl = get_custom_completions(args, registered_completions[args[0].value])
+        possible_compl = get_custom_completions(args, string(buff[:]), cursor_pos, registered_completions[args[0].value])
     } else if is_empty_arg {
         possible_compl = get_file_completions("")
     } else if len(args) > 1 {
