@@ -105,10 +105,16 @@ get_file_completions :: proc(prefix: string) -> [dynamic]string {
     return possible_compl
 }
 
-get_custom_completions :: proc(program_filepath: string) -> [dynamic]string {
+get_custom_completions :: proc(args: []Arg, program_filepath: string) -> [dynamic]string {
     possible_compl := make([dynamic]string, context.allocator)
 
-    process_desc := os.Process_Desc{command={program_filepath}}
+    argv1 := len(args) > 0 ? args[0].value : ""
+    argv2 := len(args) > 0 ? args[len(args)-1].value : ""
+    argv3 := len(args) > 1 ? args[len(args)-2].value : ""
+
+    // fmt.printfln("%s, %s, %s", argv1, argv2, argv3)
+
+    process_desc := os.Process_Desc{command={program_filepath, argv1, argv2, argv3}}
     state, stdout, stderr, err := os.process_exec(process_desc, context.allocator)
     // stdout should be freed, think how, it now fucks up the compl list if deleted
     // defer delete(stdout)
@@ -137,8 +143,8 @@ search_completion :: proc(buff: [dynamic]byte, registered_completions: ^map[stri
     possible_compl : [dynamic]string
     defer delete(possible_compl)
     
-    if is_empty_arg && current_arg in registered_completions {
-        possible_compl = get_custom_completions(registered_completions[current_arg])
+    if args[0].value in registered_completions {
+        possible_compl = get_custom_completions(args, registered_completions[args[0].value])
     } else if is_empty_arg {
         possible_compl = get_file_completions("")
     } else if len(args) > 1 {
